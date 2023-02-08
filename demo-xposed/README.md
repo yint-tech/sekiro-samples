@@ -1,3 +1,2 @@
-# majora android端源码
+# sekiro xposed demo
 
-更多产品介绍，请移步： http://majora.iinti.cn/majora-doc/index.html
