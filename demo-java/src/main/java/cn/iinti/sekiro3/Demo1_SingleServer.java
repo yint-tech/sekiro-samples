@@ -20,7 +20,8 @@ public class Demo1_SingleServer {
                                 // 接口处理逻辑，我们不做任何处理，直接返回字符串：ok
                                 sekiroResponse.success("ok");
                             }
-                        })).start();
+                        })
+                ).start();
         Thread.sleep(20000);
     }
 }
