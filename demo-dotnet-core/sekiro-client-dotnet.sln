@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30114.105
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "test", "test\test.csproj", "{91C4E3AC-23EF-4E2B-8EE2-3E9A1E5422D6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SekiroClientDotnet", "src\SekiroClientDotnet.csproj", "{A780EB4D-F881-429C-8A11-C387A59F9CAD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{91C4E3AC-23EF-4E2B-8EE2-3E9A1E5422D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91C4E3AC-23EF-4E2B-8EE2-3E9A1E5422D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91C4E3AC-23EF-4E2B-8EE2-3E9A1E5422D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91C4E3AC-23EF-4E2B-8EE2-3E9A1E5422D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A780EB4D-F881-429C-8A11-C387A59F9CAD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A780EB4D-F881-429C-8A11-C387A59F9CAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A780EB4D-F881-429C-8A11-C387A59F9CAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A780EB4D-F881-429C-8A11-C387A59F9CAD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
