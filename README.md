@@ -10,4 +10,5 @@
 - demo-web：在浏览器中使用Sekiro，需要注意的是，在浏览器中由于wss的权限拦截问题，可能需要一些额外配置才能应对比较正规的网站。具体资料需要参考Sekiro的文档
 - demo-python：使用python tornado实现的sdk，给python的标准环境使用
 - demo-go：go语言的sdk
+- demo-dotnet-core: C# 版本SDK
 - demo-ios： 将在最后支持
