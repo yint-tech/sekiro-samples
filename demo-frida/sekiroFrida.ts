@@ -14,19 +14,18 @@ interface SekiroPacket {
 
 /**
  * sekiro client base on frida socket api: https://frida.re/docs/javascript-api/#socket
- * sekiro socket internal protocol document: https://sekiro.virjar.com/sekiro-doc/03_developer/1.protocol.html
+ * sekiro socket internal protocol document: http://sekiro.iinti.cn/sekiro-doc/03_developer/1.protocol.html
  */
 class SekiroClient {
     private readonly sekiroOption: SekiroOption;
     private readonly fridaSocketConfig: TcpConnectOptions;
-    private conn !: SocketConnection;
     private handlers: any = {};
     private readBuffer?: ArrayBuffer | undefined;
     private isConnecting = false;
 
     constructor(sekiroOption: SekiroOption) {
         this.sekiroOption = sekiroOption;
-        sekiroOption.serverHost = sekiroOption.serverHost || "sekiro.virjar.com";
+        sekiroOption.serverHost = sekiroOption.serverHost || "sekiro.iinti.cn";
         sekiroOption.serverPort = sekiroOption.serverPort || 5612;
         this.fridaSocketConfig = {
             family: "ipv4",
@@ -59,9 +58,8 @@ class SekiroClient {
             .then((connection: SocketConnection) => {
                 this.isConnecting = false;
                 connection.setNoDelay(true);// no delay, sekiro packet has complement message block
-                this.conn = connection;
-                this.connRead();
-                this.connWrite({
+                this.connRead(connection);
+                this.connWrite(connection, {
                     type: 0x10,
                     serialNumber: -1,
                     headers: {
@@ -78,26 +76,27 @@ class SekiroClient {
             });
     }
 
-    private connWrite(sekiroPacket: SekiroPacket) {
-        this.conn.output.write(this.encodeSekiroPacket(sekiroPacket))
+    private connWrite(conn: SocketConnection, sekiroPacket: SekiroPacket) {
+        conn.output.write(this.encodeSekiroPacket(sekiroPacket))
             .catch((reason: any) => {
                 console.log("sekiro write register cmd failed", reason);
                 this.reConnect();
             })
     }
 
-    private connRead() {
-        this.conn.input.read(1024)
+    private connRead(conn: SocketConnection) {
+        conn.input.read(1024)
             .then((buffer: ArrayBuffer) => {
                 if (buffer.byteLength <= 0) {
-                    this.conn.close();
-                    console.log("sekiro server lost!");
-                    this.reConnect();
+                    conn.close().finally(() => {
+                        console.log("sekiro server lost!");
+                        this.reConnect();
+                    });
                     return;
                 }
-                this.onServerData(buffer);
+                this.onServerData(conn, buffer);
                 setImmediate(() => {
-                    this.connRead();
+                    this.connRead(conn);
                 });
             })
             .catch((reason: any) => {
@@ -106,7 +105,7 @@ class SekiroClient {
             });
     }
 
-    private onServerData(buffer?: ArrayBuffer) {
+    private onServerData(conn: SocketConnection, buffer?: ArrayBuffer) {
         // merge buffer data
         if (!this.readBuffer) {
             if (!buffer) {
@@ -120,11 +119,11 @@ class SekiroClient {
             view.set(new Uint8Array(buffer), this.readBuffer.byteLength);
             this.readBuffer = merge;
         }
-        const pkt = this.decodeSekiroPacket();
+        const pkt = this.decodeSekiroPacket(conn);
         if (!!pkt) {
-            this.handleServerPkg(pkt);
+            this.handleServerPkg(conn, pkt);
             //maybe more data can be decoded
-            setImmediate(() => this.onServerData());
+            setImmediate(() => this.onServerData(conn));
         }
     }
 
@@ -156,10 +155,10 @@ class SekiroClient {
         return arrayBuffer;
     }
 
-    private handleServerPkg(pkt: SekiroPacket): void {
+    private handleServerPkg(conn: SocketConnection, pkt: SekiroPacket): void {
         if (pkt.type == 0x00) {
             // this is heart beat pkg
-            this.connWrite(pkt);
+            this.connWrite(conn, pkt);
             return;
         }
         if (pkt.type != 0x20) {
@@ -169,7 +168,7 @@ class SekiroClient {
 
         const that = this;
         let writeInvokeResponse = (json: any) => {
-            that.connWrite({
+            that.connWrite(conn, {
                 type: 0x11, serialNumber: pkt.serialNumber,
                 headers: {"PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON"},
                 data: that.encodeSekiroFastJSON(json)
@@ -206,7 +205,7 @@ class SekiroClient {
         }
     }
 
-    private decodeSekiroPacket(): SekiroPacket | undefined {
+    private decodeSekiroPacket(conn: SocketConnection): SekiroPacket | undefined {
         if (!this.readBuffer) {
             return undefined;
         }
@@ -215,7 +214,7 @@ class SekiroClient {
         const magic2 = v.getInt32(4);
         if (magic1 != 0x73656b69 || magic2 != 0x726f3031) {
             console.log("sekiro packet data");
-            this.conn.close().then(() => {
+            conn.close().then(() => {
                 console.log("sekiro close broken pipe");
             })
             this.readBuffer = undefined;

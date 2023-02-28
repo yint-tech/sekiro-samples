@@ -2,14 +2,14 @@
 exports.__esModule = true;
 /**
  * sekiro client base on frida socket api: https://frida.re/docs/javascript-api/#socket
- * sekiro socket internal protocol document: https://sekiro.virjar.com/sekiro-doc/03_developer/1.protocol.html
+ * sekiro socket internal protocol document: http://sekiro.iinti.cn/sekiro-doc/03_developer/1.protocol.html
  */
 var SekiroClient = /** @class */ (function () {
     function SekiroClient(sekiroOption) {
         this.handlers = {};
         this.isConnecting = false;
         this.sekiroOption = sekiroOption;
-        sekiroOption.serverHost = sekiroOption.serverHost || "sekiro.virjar.com";
+        sekiroOption.serverHost = sekiroOption.serverHost || "sekiro.iinti.cn";
         sekiroOption.serverPort = sekiroOption.serverPort || 5612;
         this.fridaSocketConfig = {
             family: "ipv4",
@@ -40,9 +40,8 @@ var SekiroClient = /** @class */ (function () {
             .then(function (connection) {
             _this.isConnecting = false;
             connection.setNoDelay(true); // no delay, sekiro packet has complement message block
-            _this.conn = connection;
-            _this.connRead();
-            _this.connWrite({
+            _this.connRead(connection);
+            _this.connWrite(connection, {
                 type: 0x10,
                 serialNumber: -1,
                 headers: {
@@ -56,33 +55,34 @@ var SekiroClient = /** @class */ (function () {
             _this.reConnect();
         });
     };
-    SekiroClient.prototype.connWrite = function (sekiroPacket) {
+    SekiroClient.prototype.connWrite = function (conn, sekiroPacket) {
         var _this = this;
-        this.conn.output.write(this.encodeSekiroPacket(sekiroPacket))["catch"](function (reason) {
+        conn.output.write(this.encodeSekiroPacket(sekiroPacket))["catch"](function (reason) {
             console.log("sekiro write register cmd failed", reason);
             _this.reConnect();
         });
     };
-    SekiroClient.prototype.connRead = function () {
+    SekiroClient.prototype.connRead = function (conn) {
         var _this = this;
-        this.conn.input.read(1024)
+        conn.input.read(1024)
             .then(function (buffer) {
             if (buffer.byteLength <= 0) {
-                _this.conn.close();
-                console.log("sekiro server lost!");
-                _this.reConnect();
+                conn.close()["finally"](function () {
+                    console.log("sekiro server lost!");
+                    _this.reConnect();
+                });
                 return;
             }
-            _this.onServerData(buffer);
+            _this.onServerData(conn, buffer);
             setImmediate(function () {
-                _this.connRead();
+                _this.connRead(conn);
             });
         })["catch"](function (reason) {
             console.log("sekiro read_loop error", reason);
             _this.reConnect();
         });
     };
-    SekiroClient.prototype.onServerData = function (buffer) {
+    SekiroClient.prototype.onServerData = function (conn, buffer) {
         var _this = this;
         // merge buffer data
         if (!this.readBuffer) {
@@ -98,11 +98,11 @@ var SekiroClient = /** @class */ (function () {
             view.set(new Uint8Array(buffer), this.readBuffer.byteLength);
             this.readBuffer = merge;
         }
-        var pkt = this.decodeSekiroPacket();
+        var pkt = this.decodeSekiroPacket(conn);
         if (!!pkt) {
-            this.handleServerPkg(pkt);
+            this.handleServerPkg(conn, pkt);
             //maybe more data can be decoded
-            setImmediate(function () { return _this.onServerData(); });
+            setImmediate(function () { return _this.onServerData(conn); });
         }
     };
     SekiroClient.prototype.encodeSekiroFastJSON = function (commonRes) {
@@ -132,10 +132,10 @@ var SekiroClient = /** @class */ (function () {
         }
         return arrayBuffer;
     };
-    SekiroClient.prototype.handleServerPkg = function (pkt) {
+    SekiroClient.prototype.handleServerPkg = function (conn, pkt) {
         if (pkt.type == 0x00) {
             // this is heart beat pkg
-            this.connWrite(pkt);
+            this.connWrite(conn, pkt);
             return;
         }
         if (pkt.type != 0x20) {
@@ -144,7 +144,7 @@ var SekiroClient = /** @class */ (function () {
         }
         var that = this;
         var writeInvokeResponse = function (json) {
-            that.connWrite({
+            that.connWrite(conn, {
                 type: 0x11, serialNumber: pkt.serialNumber,
                 headers: { "PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON" },
                 data: that.encodeSekiroFastJSON(json)
@@ -179,7 +179,7 @@ var SekiroClient = /** @class */ (function () {
             reject("sekiro handler error:" + e + JSON.stringify(e));
         }
     };
-    SekiroClient.prototype.decodeSekiroPacket = function () {
+    SekiroClient.prototype.decodeSekiroPacket = function (conn) {
         if (!this.readBuffer) {
             return undefined;
         }
@@ -188,7 +188,7 @@ var SekiroClient = /** @class */ (function () {
         var magic2 = v.getInt32(4);
         if (magic1 != 0x73656b69 || magic2 != 0x726f3031) {
             console.log("sekiro packet data");
-            this.conn.close().then(function () {
+            conn.close().then(function () {
                 console.log("sekiro close broken pipe");
             });
             this.readBuffer = undefined;
