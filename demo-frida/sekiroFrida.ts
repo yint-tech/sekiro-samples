@@ -168,10 +168,12 @@ class SekiroClient {
 
         const that = this;
         let writeInvokeResponse = (json: any) => {
-            that.connWrite(conn, {
-                type: 0x11, serialNumber: pkt.serialNumber,
-                headers: {"PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON"},
-                data: that.encodeSekiroFastJSON(json)
+            setImmediate(() => {
+                that.connWrite(conn, {
+                    type: 0x11, serialNumber: pkt.serialNumber,
+                    headers: {"PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON"},
+                    data: that.encodeSekiroFastJSON(json)
+                });
             });
         };
         let resolve = (data) => {

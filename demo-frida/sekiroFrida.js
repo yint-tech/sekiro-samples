@@ -144,10 +144,12 @@ var SekiroClient = /** @class */ (function () {
         }
         var that = this;
         var writeInvokeResponse = function (json) {
-            that.connWrite(conn, {
-                type: 0x11, serialNumber: pkt.serialNumber,
-                headers: { "PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON" },
-                data: that.encodeSekiroFastJSON(json)
+            setImmediate(function () {
+                that.connWrite(conn, {
+                    type: 0x11, serialNumber: pkt.serialNumber,
+                    headers: { "PAYLOAD_CONTENT_TYPE": "CONTENT_TYPE_SEKIRO_FAST_JSON" },
+                    data: that.encodeSekiroFastJSON(json)
+                });
             });
         };
         var resolve = function (data) {
