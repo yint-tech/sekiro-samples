@@ -155,4 +155,4 @@ class AbsSekiroConn:
             print("connection lost, prepare reconnect")
 
         self._active = False
-        ioloop.IOLoop.current().call_later(3, self.loop)
+        self.io_loop.call_later(3, self.loop)

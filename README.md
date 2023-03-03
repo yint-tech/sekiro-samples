@@ -11,4 +11,4 @@
 - demo-python：使用python tornado实现的sdk，给python的标准环境使用
 - demo-go：go语言的sdk
 - demo-dotnet-core: C# 版本SDK
-- demo-ios： 将在最后支持
+- demo-objective-c：在mac平台和IOS平台的SDK
