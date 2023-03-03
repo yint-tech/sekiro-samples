@@ -1,4 +1,5 @@
 # Invoker是给客户端调用sekiro提供的高性能和使用友好的API
+import asyncio
 import gzip
 import json
 import threading
@@ -106,7 +107,6 @@ class _InvokerConn(AbsSekiroConn):
         self._api_token = api_token
         self._seq = 0
         self._start_wait_condition = condition
-        self.start()
         self.running_request = {}
 
     def make_register_pkg(self) -> _SekiroPacket:
@@ -115,7 +115,7 @@ class _InvokerConn(AbsSekiroConn):
         for key in self.running_request.keys():
             record: _Record = self.running_request.pop(key)
             record.response("lost connection to sekiro server node")
-
+            
         self._start_wait_condition.acquire()
         self._start_wait_condition.notify_all()
         self._start_wait_condition.release()
@@ -127,7 +127,7 @@ class _InvokerConn(AbsSekiroConn):
 
     def handle_packet(self, sekiro_packet: _SekiroPacket, stream: iostream):
         if sekiro_packet.message_type == 0x24:
-            print("connect to server success")
+            print("connect to sekiro server success")
             return
         if sekiro_packet.message_type != 0x11 and sekiro_packet.message_type != 0x23:
             print("unknown server msg: " + str(sekiro_packet.message_type))
@@ -181,14 +181,9 @@ class SekiroInvoker:
         for server in server_list:
             segments = server.split(":")
             self.conns.append(_InvokerConn(api_token, segments[0], int(segments[1]), self.condition))
-        threading.Thread(target=self.__do_start()).start()
+        threading.Thread(target=self.__do_start).start()
         print("""       welcome to use sekiro framework
                 for more support please visit our website: https://iinti.cn""")
-
-    def __do_start(self):
-        for con in self.conns:
-            ioloop.IOLoop.current().call_later(0, con.loop)
-
         self.condition.acquire()
         self.condition.wait(30)
         self.condition.release()
@@ -197,6 +192,15 @@ class SekiroInvoker:
             if conn.is_active():
                 return
         raise "connect to sekiro server node timeout"
+
+    def __do_start(self):
+        event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(event_loop)
+
+        for con in self.conns:
+            ioloop.IOLoop.instance().add_callback(con.loop)
+
+        ioloop.IOLoop.instance().start()
 
     def request(self, group, action, **kwargs):
         """ 调用sekiro服务，将会选择某个存活的skeiro服务器进行调用转发 """

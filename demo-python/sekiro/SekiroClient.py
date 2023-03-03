@@ -99,8 +99,8 @@ for more support please visit our website: https://iinti.cn""")
             return
         request_str = sekiro_packet.data.decode("utf-8")
         print("sekiro receive request: ", request_str)
-        request = json.loads(request_str)
-        action = request["action"]
+        request: dict = json.loads(request_str)
+        action = request.get("action")
         if action is None:
             sekiro_response.failed("the param: {action} not presented!!")
             return
