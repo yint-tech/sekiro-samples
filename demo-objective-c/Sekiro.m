@@ -306,7 +306,7 @@ static void pack_b8(NSMutableData *d, int64_t val)
     handlers[act] = [NSValue valueWithPointer:handle];
 }
 
-- (int)makeClient {
+- (int)connectToSekiroServer {
     struct addrinfo hints;
     struct addrinfo * result, * rp;
     int s;
@@ -357,7 +357,11 @@ static void pack_b8(NSMutableData *d, int64_t val)
         } else {
             read_len = len;
         }
-        read(stream, buffer, read_len);
+        ssize_t size =  read(stream, buffer, read_len);
+        if(size<0){
+            // EOF, return nil
+            return nil;
+        }
         [data appendBytes:&buffer length:read_len];
         len -= read_len;
     }
@@ -379,42 +383,60 @@ static void pack_b8(NSMutableData *d, int64_t val)
 -(void) loop{
     while (true) {
         BOOL status = [self currentNetworkStatus];
-        if (status)
-            [self run_sekiro_connection];
-        else {
-            [NSThread sleepForTimeInterval:5];
+        if (status){
+            int streamFd = [self connectToSekiroServer];
+            if(streamFd >0){
+                @try {
+                    [self loopSekiroConnection:streamFd];
+                } @catch (NSException *exception) {
+                    NSLog(@"%@", exception);
+                } @finally {
+                    close(streamFd);// 确保链接被关闭了
+                }
+            }
             NSLog(@"connection lost, try to connect ...");
+        }else{
+            NSLog(@"network status bad, try to connect ...");
         }
+        [NSThread sleepForTimeInterval:5];
     }
 }
 
 
-- (void)run_sekiro_connection {
-    int stream = [self makeClient];
-    if (stream != -1) {
-        uint8_t buffer[8];
-        NSLog(@"connected to %@:%d", host, port);
-        [[self makeRegister] write_to:stream];
-        while (true) {
-            uint64_t magic;
-            uint32_t length;
-            read(stream, &buffer, 8);
-            magic = OSReadBigInt64(buffer, 0);
-            NSLog(@"read magic");
-            if (magic != MAGIC) {
-                NSLog(@"protocol error, magic1 expected:%lld actually: %lld", MAGIC, magic);
-                close(stream);
-                break;
-            }
-            read(stream, &buffer, 4);
-            length = OSReadBigInt32(buffer, 0);
-            
-            NSData *body_data = [self readStream:stream length:length];
-            SekiroPacket *packet = [[SekiroPacket alloc] init];
-            [packet read_from:body_data];
-            [self onPacketRead:packet stream:stream];
+- (void)loopSekiroConnection:(int)streamFd {
+    uint8_t buffer[8];
+    NSLog(@"connected to %@:%d", host, port);
+    [[self makeRegister] write_to:streamFd];
+    while (true) {
+        ssize_t size = read(streamFd, &buffer, 8);
+        if(size!=8){
+            // EOF
+            return;
         }
+        uint64_t magic = OSReadBigInt64(buffer, 0);
+        NSLog(@"read magic");
+        if (magic != MAGIC) {
+            NSLog(@"protocol error, magic1 expected:%lld actually: %lld", MAGIC, magic);
+            return;
+        }
+        size = read(streamFd, &buffer, 4);
+        if(size!=4){
+            // EOF
+            return;
+        }
+        uint32_t length = OSReadBigInt32(buffer, 0);
+        
+        NSData *sekiroPacketPaylod = [self readStream:streamFd length:length];
+        if(sekiroPacketPaylod == nil){
+            // EOF
+            return;
+        }
+        
+        SekiroPacket *packet = [[SekiroPacket alloc] init];
+        [packet read_from:sekiroPacketPaylod];
+        [self onPacketRead:packet stream:streamFd];
     }
+
 }
 
 - (void)start {
@@ -427,10 +449,10 @@ static void pack_b8(NSMutableData *d, int64_t val)
     [thread start];
 }
 
-- (void)onPacketRead:(SekiroPacket *)p stream:(int)s {
+- (void)onPacketRead:(SekiroPacket *)p stream:(int)streamFd {
     int messageType = [p messegeType];
     if (messageType == 0x00) {
-        [p write_to:s];
+        [p write_to:streamFd];
         return;
     }
 
@@ -439,7 +461,7 @@ static void pack_b8(NSMutableData *d, int64_t val)
         return;
     }
 
-    SekiroResponse *response = [[SekiroResponse alloc] init:s seq:[p seq] sekiroClient:self];
+    SekiroResponse *response = [[SekiroResponse alloc] init:streamFd seq:[p seq] sekiroClient:self];
 
     if (![p data]) {
         [response failed:@"sekiro system error, no request payload present!!"];
@@ -464,7 +486,12 @@ static void pack_b8(NSMutableData *d, int64_t val)
         [response failed:@"sekiro no handler for this action"];
         return;
     }
-    handler(request_dict, response);
+    @try {
+        handler(request_dict, response);
+    } @catch (NSException *exception) {
+        NSLog(@"sekiro handler exception: %@", exception);
+    }
+    
 }
 
 @end
