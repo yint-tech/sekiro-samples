@@ -115,7 +115,7 @@ class _InvokerConn(AbsSekiroConn):
         for key in self.running_request.keys():
             record: _Record = self.running_request.pop(key)
             record.response("lost connection to sekiro server node")
-            
+
         self._start_wait_condition.acquire()
         self._start_wait_condition.notify_all()
         self._start_wait_condition.release()
@@ -132,9 +132,9 @@ class _InvokerConn(AbsSekiroConn):
         if sekiro_packet.message_type != 0x11 and sekiro_packet.message_type != 0x23:
             print("unknown server msg: " + str(sekiro_packet.message_type))
             return
-        record = self.running_request[sekiro_packet.seq]
+        record = self.running_request.get(sekiro_packet.seq)
         if record is None:
-            print("no invoke record for: %d", sekiro_packet.seq)
+            print("no invoke record for: ", sekiro_packet.seq)
             return
         record.response(sekiro_packet)
 
@@ -154,11 +154,11 @@ class _InvokerConn(AbsSekiroConn):
             request_body['sekiro_token'] = self._api_token
         sekiro_packet.data = json.dumps(request_body, ensure_ascii=False).encode("utf-8")
 
-        self.io_loop.call_later(0, lambda: sekiro_packet.write_to(self.now_stream))
-
         # 注册回调
         record = _Record()
         self.running_request[seq] = record
+
+        self.io_loop.call_later(0, lambda: sekiro_packet.write_to(self.now_stream))
 
         wait_time = 20
         config = kwargs.get('invoke_timeout')
@@ -183,7 +183,8 @@ class SekiroInvoker:
             self.conns.append(_InvokerConn(api_token, segments[0], int(segments[1]), self.condition))
         threading.Thread(target=self.__do_start).start()
         print("""       welcome to use sekiro framework
-                for more support please visit our website: https://iinti.cn""")
+                for more support please visit our website: https://iinti.cn
+                """)
         self.condition.acquire()
         self.condition.wait(30)
         self.condition.release()
@@ -203,7 +204,7 @@ class SekiroInvoker:
         ioloop.IOLoop.instance().start()
 
     def request(self, group, action, **kwargs):
-        """ 调用sekiro服务，将会选择某个存活的skeiro服务器进行调用转发 """
+        """ 调用sekiro服务，将会选择某个存活的sekiro服务器进行调用转发 """
         if len(self.conns) == 1:
             return self.conns[0].request(group, action, **kwargs)
         slot = self.index

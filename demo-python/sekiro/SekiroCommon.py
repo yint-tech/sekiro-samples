@@ -147,7 +147,6 @@ class AbsSekiroConn:
                 sekiro_packet.read_from(body_data)
                 if sekiro_packet.message_type == 0x00:
                     # this is heartbeat pkg
-                    print("receive heartbeat pkg")
                     sekiro_packet.write_to(stream)
                     continue
                 self.handle_packet(sekiro_packet, stream)
