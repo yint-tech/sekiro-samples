@@ -343,7 +343,7 @@ static void pack_b8(NSMutableData *d, int64_t val)
 }
 
 - (NSData *)readStream:(int) stream length:(int)len {
-    uint8 buffer[1024];
+    uint8_t buffer[1024];
     NSMutableData *data = [[NSMutableData alloc] init];
     int read_len = 0;
     while (len > 0){

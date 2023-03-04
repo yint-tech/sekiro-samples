@@ -2,8 +2,9 @@
 //  main.m
 //  sekiro-oc
 //
-//  Created by yint on 2023/3/1.
+//  Created by yint on 2023/3/4.
 //
+
 
 #import <Foundation/Foundation.h>
 #include "Sekiro.h"
@@ -15,6 +16,7 @@ void test(NSDictionary *request, SekiroResponse *response) {
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
+        // https://sekiro.iinti.cn/business/invoke?group=test-objective-c&action=testAction
         SekiroClient *client = [[SekiroClient alloc] init:@"test-objective-c"];
         [client registerAction:@"testAction" handler: test];
         [client start];
