@@ -215,13 +215,14 @@ static void pack_b8(NSMutableData *d, int64_t val)
     int stream;
     BOOL respond;
     int seq;
+    SekiroClient * sekiroClient;
 }
 
-- (SekiroResponse *)init:(int)streamVal seq:(int)seqVal {
+- (SekiroResponse *)init:(int)streamVal seq:(int)seqVal sekiroClient:(SekiroClient *)sekiroClientVal {
     stream = streamVal;
     seq = seqVal;
     respond = FALSE;
-    
+    sekiroClient =sekiroClientVal;
     return self;
 }
 
@@ -247,7 +248,11 @@ static void pack_b8(NSMutableData *d, int64_t val)
     [p add_header:@"PAYLOAD_CONTENT_TYPE"
             value:@"CONTENT_TYPE_SEKIRO_FAST_JSON"];
     [p setData:[r encode]];
-    [p write_to:stream];
+    
+    @synchronized (sekiroClient) {
+        // 同一个client，保证只能有一个线程在写回包
+        [p write_to:stream];
+    }
 }
 
 @end
@@ -434,7 +439,7 @@ static void pack_b8(NSMutableData *d, int64_t val)
         return;
     }
 
-    SekiroResponse *response = [[SekiroResponse alloc] init:s seq:[p seq]];
+    SekiroResponse *response = [[SekiroResponse alloc] init:s seq:[p seq] sekiroClient:self];
 
     if (![p data]) {
         [response failed:@"sekiro system error, no request payload present!!"];
