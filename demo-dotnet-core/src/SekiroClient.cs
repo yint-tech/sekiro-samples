@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace SekiroClientDotnet
 {
@@ -72,6 +73,7 @@ namespace SekiroClientDotnet
                             await ReportHeartbeatMsg(netStream, sekiroPacket);
                             continue;
                         }
+                        var requestBody = JToken.Parse(Encoding.UTF8.GetString(sekiroPacket.Data, 0, sekiroPacket.Data.Length));
                         var replyMsg = new SekiroPacket(MessageTypes.SendToServer, sekiroPacket.Seq);
                         replyMsg.Headers.Add("PAYLOAD_CONTENT_TYPE", "PAYLOAD_CONTENT_TYPE");
                         replyMsg.Headers.Add("SEKIRO_GROUP", this.groupName);

@@ -149,7 +149,7 @@ namespace SekiroClientDotnet
                 {
                     // ToDo read header
                 }
-                var bodyLen = bufferLen - SekiroConstant.TotalLen - SekiroConstant.MsgTypeLen - SekiroConstant.SeqIdLen - SekiroConstant.HeaderSizeLen - HeadersSize;
+                var bodyLen = bufferLen - SekiroConstant.MsgTypeLen - SekiroConstant.SeqIdLen - SekiroConstant.HeaderSizeLen - HeadersSize;
                 var bodyBuffer = new byte[bodyLen];
                 stream.Read(bodyBuffer, 0, bodyBuffer.Length);
                 sekiroPacket.Data = bodyBuffer;
