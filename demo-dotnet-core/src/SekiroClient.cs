@@ -34,6 +34,8 @@ namespace SekiroClientDotnet
         /// </summary>
         string clientId { get; set; }
 
+        static NetworkStream netStream { get; set; }
+
 
         public SekiroClient(string host, int port, string groupName, string clientId = "")
         {
@@ -50,33 +52,27 @@ namespace SekiroClientDotnet
 
         public async Task Start()
         {
-            // Create TCP client and connect
-            // Then get the netStream and pass it
-            // To our StreamWriter and StreamReader
-            using (var client = new TcpClient(this.serverHost, this.serverPort))
-            using (var netStream = client.GetStream())
+            try
             {
-                await SendRegToServer(netStream);
-                while (netStream.CanRead)
+                // Create TCP client and connect
+                // Then get the netStream and pass it
+                // To our StreamWriter and StreamReader
+                using (var tcpClient = new TcpClient(this.serverHost, this.serverPort))
+                using (netStream = tcpClient.GetStream())
                 {
-                    string magicMsg = await ReadMagicMsg(netStream);
-                    if (magicMsg != SekiroConstant.Magic)
+                    // 启动后发送注册包
+                    await SendRegToServer(netStream);
+                    while (netStream.CanRead)
                     {
-                        // todo Exit()
-                        continue;
-                    }
-                    int totalLength = await ReadTotalLength(netStream);
-                    byte[] packetBuffer = await ReadPacketBuffer(netStream, totalLength);
-                    var sekiroPacket = SekiroPacket.ToSekiroPacket(packetBuffer, totalLength);
-                    Console.WriteLine($"rev message, seq :{sekiroPacket.Seq},type:{sekiroPacket.MessageType}");
-                    if (sekiroPacket.MessageType == MessageTypes.Heartbeat)
-                    {
-                        await ReportHeartbeatMsg(netStream, sekiroPacket);
-                    }
-                    else
-                    {
+                        // 检查MagicMsg
+                        await CheckMagicMsg();
+                        SekiroPacket sekiroPacket = await ReadPacket();
+                        if (sekiroPacket.MessageType == MessageTypes.Heartbeat)
+                        {
+                            await ReportHeartbeatMsg(netStream, sekiroPacket);
+                            continue;
+                        }
                         var replyMsg = new SekiroPacket(MessageTypes.SendToServer, sekiroPacket.Seq);
-                        //replyMsg.Headers.Add("PAYLOAD_CONTENT_TYPE", "CONTENT_TYPE_SEKIRO_FAST_JSON");
                         replyMsg.Headers.Add("PAYLOAD_CONTENT_TYPE", "PAYLOAD_CONTENT_TYPE");
                         replyMsg.Headers.Add("SEKIRO_GROUP", this.groupName);
                         replyMsg.Headers.Add("SEKIRO_CLIENT_ID", this.clientId);
@@ -89,9 +85,39 @@ namespace SekiroClientDotnet
                         var repText = replyMsg.ToHexStrFromByte();
                         await netStream.WriteAsync(respBuffer, 0, respBuffer.Length);
                         Console.WriteLine($"send seq :{sekiroPacket.Seq} response successfully.");
+
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"something wrong,err:{ex?.ToString()},{ex.StackTrace}");
+            }
+            finally
+            {
+                Console.WriteLine($"restart client.");
+                await Start();
+            }
+
+
+        }
+
+        private static async Task CheckMagicMsg()
+        {
+            string magicMsg = await ReadMagicMsg(netStream);
+            if (magicMsg != SekiroConstant.Magic)
+            {
+                throw new Exception($"rev magicMsg fail,restart it, magicMsg:{magicMsg}");
+            }
+        }
+
+        private static async Task<SekiroPacket> ReadPacket()
+        {
+            int totalLength = await ReadTotalLength(netStream);
+            byte[] packetBuffer = await ReadPacketBuffer(netStream, totalLength);
+            var sekiroPacket = SekiroPacket.ToSekiroPacket(packetBuffer, totalLength);
+            Console.WriteLine($"rev message, seq :{sekiroPacket.Seq},type:{sekiroPacket.MessageType}");
+            return sekiroPacket;
         }
 
 
@@ -102,6 +128,8 @@ namespace SekiroClientDotnet
         {
             var heartbeatBuffer = sekiroPacket.ToBuffer();
             await netStream.WriteAsync(heartbeatBuffer, 0, heartbeatBuffer.Length);
+            Console.WriteLine("reply heartbeat successfully.");
+
         }
 
         /// <summary>
