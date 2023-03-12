@@ -1,0 +1,65 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset = utf-8"/>
+    <title>Sekiro Web测试</title>
+    <script type="text/javascript" src="sekiroWeb.js"></script>
+    <script type="text/javascript">
+        var client = new SekiroClient("wss://sekiro.iinti.cn:5612/business/register?group=demo-ws&clientId=" + Math.random());
+        client.registerAction("clientTime", function (request, resolve, reject) {
+            resolve("SekiroMessage：" + new Date());
+        });
+
+        client.registerAction("executeJs", function (request, resolve, reject) {
+            var code = request['code'];
+            if (!code) {
+                reject("need param:{code}");
+                return;
+            }
+
+            code = "return " + code;
+
+            console.log("executeJs: " + code);
+
+            try {
+                var result = new Function(code)();
+                resolve(result);
+            } catch (e) {
+                reject("error: " + e);
+            }
+
+        });
+
+
+    </script>
+
+
+</head>
+<body>
+
+<p>
+    使用方法：将js文件 <a href="sekiroWeb.js">sekiro_web_client.js</a> 注入到浏览器环境
+    ,之后通过当前接口访问浏览器服务:<a href="https://sekiro.iinti.cn/business/invoke?group=demo-ws&action=clientTime"
+                                       target="_blank">https://sekiro.iinti.cn/business/invoke?group=demo-ws&action=clientTime</a>
+
+
+</p>
+<p>
+    测试当前用例的时候，建议开启浏览器控制台
+</p>
+<p>
+    然后通过SekiroClient和Sekiro服务器通信，即可直接RPC调用浏览器内部方法
+</p>
+
+<pre>
+var client = new SekiroClient("wss://sekiro.iinti.cn:5612/business/register?group=demo-ws&clientId="+Math.random());
+client.registerAction("clientTime",function(request, resolve,reject ){
+            resolve(""+new Date());
+})
+</pre>
+
+<p>
+    请注意，Sekiro JS RPC是Sekiro的扩展，依然需要遵循Sekiro的各种规则定义。
+</p>
+
+</body>
+</html>
