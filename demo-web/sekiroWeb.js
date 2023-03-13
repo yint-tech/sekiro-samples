@@ -73,17 +73,14 @@ SekiroClient.prototype.resolveWebSocketFactory = function () {
 SekiroClient.prototype.connect = function () {
     console.log('sekiro: begin of connect to wsURL: ' + this.wsURL);
     var _this = this;
-    // 不check close，让
-    // if (this.socket && this.socket.readyState === 1) {
-    //     this.socket.close();
-    // }
     try {
         this.socket = this.webSocketFactory(this.wsURL);
     } catch (e) {
-        console.log("sekiro: create connection failed,reconnect after 2s");
+        console.log("sekiro: create connection failed,reconnect after 2s:" + e);
         setTimeout(function () {
             _this.connect()
         }, 2000)
+        return;
     }
 
     this.socket.onmessage(function (event) {
@@ -151,7 +148,7 @@ SekiroClient.prototype.sendSuccess = function (seq, response) {
         responseJson['data'] = response;
     }
 
-    if (Array.isArray(responseJson) || typeof responseJson =='string') {
+    if (Array.isArray(responseJson) || typeof responseJson == 'string') {
         responseJson = {
             data: responseJson,
             code: 0
