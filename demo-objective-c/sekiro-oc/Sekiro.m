@@ -414,7 +414,6 @@ static void pack_b8(NSMutableData *d, int64_t val)
             return;
         }
         uint64_t magic = OSReadBigInt64(buffer, 0);
-        NSLog(@"read magic");
         if (magic != MAGIC) {
             NSLog(@"protocol error, magic1 expected:%lld actually: %lld", MAGIC, magic);
             return;

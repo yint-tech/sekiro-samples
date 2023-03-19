@@ -420,6 +420,6 @@ class SekiroClient {
 
 // test frida
 const client = new SekiroClient({sekiroGroup: "test_frida", clientId: "test"});
-client.registerAction("testAction", function (request, resolve) {
-    resolve("ok");
+client.registerAction("add", function (request, resolve) {
+    resolve(request.a + request.b);
 });

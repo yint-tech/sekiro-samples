@@ -57,17 +57,18 @@ class SekiroClient {
         Socket.connect(this.fridaSocketConfig)
             .then((connection: SocketConnection) => {
                 this.isConnecting = false;
-                connection.setNoDelay(true);// no delay, sekiro packet has complement message block
-                this.connRead(connection);
-                this.connWrite(connection, {
-                    type: 0x10,
-                    serialNumber: -1,
-                    headers: {
-                        'SEKIRO_GROUP': this.sekiroOption.sekiroGroup,
-                        'SEKIRO_CLIENT_ID': this.sekiroOption.clientId,
-                    },
-                } as SekiroPacket)
-
+                connection.setNoDelay(true)// no delay, sekiro packet has complement message block
+                    .finally(() => {
+                        this.connRead(connection);
+                        this.connWrite(connection, {
+                            type: 0x10,
+                            serialNumber: -1,
+                            headers: {
+                                'SEKIRO_GROUP': this.sekiroOption.sekiroGroup,
+                                'SEKIRO_CLIENT_ID': this.sekiroOption.clientId,
+                            },
+                        } as SekiroPacket)
+                    })
             })
             .catch((reason: any) => {
                 this.isConnecting = false;
