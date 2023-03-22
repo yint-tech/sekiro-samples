@@ -257,6 +257,37 @@ static void pack_b8(NSMutableData *d, int64_t val)
 
 @end
 
+@interface   SekiroTask : NSOperation{
+    NSDictionary * request_dict;
+    SekiroResponse *response;
+    SekiroHandler handler;
+}
+- (SekiroTask*)init:(NSDictionary *)request
+           response:(SekiroResponse *)r
+             handler:(SekiroHandler)h;
+@end
+
+@implementation SekiroTask
+
+- (SekiroTask*)init:(NSDictionary *)requestVal
+           response:(SekiroResponse *)r
+            handler:(SekiroHandler)h{
+    request_dict=requestVal;
+    response = r;
+    handler = h;
+    return self;
+}
+
+- (void) main{
+    @try {
+        handler(request_dict, response);
+    } @catch (NSException *exception) {
+        NSLog(@"sekiro handler exception: %@", exception);
+    }
+}
+@end
+
+
 
 @implementation SekiroClient {
     NSString *group;
@@ -265,6 +296,7 @@ static void pack_b8(NSMutableData *d, int64_t val)
     NSString *clientId;
     NSMutableDictionary *handlers;
     BOOL started;
+    NSOperationQueue * taskQueue;
 }
 
 - (SekiroClient *)init:(NSString *)groupVal host:(NSString *)h port:(int)p clientId:(NSString *)c {
@@ -443,6 +475,8 @@ static void pack_b8(NSMutableData *d, int64_t val)
         return;
     }
     started = true;
+    taskQueue = [[NSOperationQueue alloc] init];
+    
     NSThread *thread = [[NSThread alloc]initWithTarget:self selector:@selector(loop) object:nil];
     thread.name = @"sekiro-main-thread";
     [thread start];
@@ -485,12 +519,10 @@ static void pack_b8(NSMutableData *d, int64_t val)
         [response failed:@"sekiro no handler for this action"];
         return;
     }
-    @try {
-        handler(request_dict, response);
-    } @catch (NSException *exception) {
-        NSLog(@"sekiro handler exception: %@", exception);
-    }
     
+    // executor on thread pool
+    SekiroTask * sekiroTask = [[SekiroTask alloc] init:request_dict  response:response   handler:handler];
+    [taskQueue addOperation:sekiroTask];
 }
 
 @end
