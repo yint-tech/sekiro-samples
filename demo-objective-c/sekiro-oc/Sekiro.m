@@ -436,38 +436,50 @@ static void pack_b8(NSMutableData *d, int64_t val)
 
 
 - (void)loopSekiroConnection:(int)streamFd {
-    uint8_t buffer[8];
     NSLog(@"connected to %@:%d", host, port);
     [[self makeRegister] write_to:streamFd];
     while (true) {
-        ssize_t size = read(streamFd, &buffer, 8);
-        if(size!=8){
-            // EOF
-            return;
-        }
-        uint64_t magic = OSReadBigInt64(buffer, 0);
-        if (magic != MAGIC) {
-            NSLog(@"protocol error, magic1 expected:%lld actually: %lld", MAGIC, magic);
-            return;
-        }
-        size = read(streamFd, &buffer, 4);
-        if(size!=4){
-            // EOF
-            return;
-        }
-        uint32_t length = OSReadBigInt32(buffer, 0);
-        
-        NSData *sekiroPacketPaylod = [self readStream:streamFd length:length];
-        if(sekiroPacketPaylod == nil){
-            // EOF
-            return;
-        }
-        
-        SekiroPacket *packet = [[SekiroPacket alloc] init];
-        [packet read_from:sekiroPacketPaylod];
-        [self onPacketRead:packet stream:streamFd];
-    }
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+        dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+        dispatch_async(queue, ^{
+            uint8_t buffer[8];
+            ssize_t size = read(streamFd, &buffer, 8);
+            if(size!=8){
+                // EOF
+                return;
+            }
+            uint64_t magic = OSReadBigInt64(buffer, 0);
+            if (magic != MAGIC) {
+                NSLog(@"protocol error, magic1 expected:%lld actually: %lld", MAGIC, magic);
+                return;
+            }
+            size = read(streamFd, &buffer, 4);
+            if(size!=4){
+                // EOF
+                return;
+            }
+            uint32_t length = OSReadBigInt32(buffer, 0);
+            
+            NSData *sekiroPacketPaylod = [self readStream:streamFd length:length];
+            if(sekiroPacketPaylod == nil){
+                // EOF
+                return;
+            }
 
+            SekiroPacket *packet = [[SekiroPacket alloc] init];
+            [packet read_from:sekiroPacketPaylod];
+            [self onPacketRead:packet stream:streamFd];
+            dispatch_semaphore_signal(semaphore);
+        });
+        
+        NSUInteger timeoutInSeconds = 60;
+        dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, timeoutInSeconds * NSEC_PER_SEC);
+        long result = dispatch_semaphore_wait(semaphore, timeout);
+        // 判断是否超时
+        if (result != 0) {
+            return;
+        }
+    }
 }
 
 - (void)start {
