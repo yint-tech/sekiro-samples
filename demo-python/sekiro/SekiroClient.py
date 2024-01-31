@@ -2,7 +2,7 @@
 import json
 from uuid import uuid4
 
-from tornado import iostream
+from tornado import ioloop, iostream
 
 from sekiro.SekiroCommon import _CommonRes, _SekiroPacket, AbsSekiroConn
 
@@ -26,10 +26,11 @@ def _encode_sekiro_fast_json(common_res: _CommonRes) -> bytes:
 
 
 class SekiroResponse:
-    def __init__(self, stream: iostream, seq: int):
+    def __init__(self, stream: iostream, seq: int, io_loop: ioloop.IOLoop):
         self._stream = stream
         self._respond = False
         self._seq = seq
+        self.io_loop = io_loop
 
     def success(self, data):
         """
@@ -49,7 +50,8 @@ class SekiroResponse:
         response_pkg.message_type = 0x11
         response_pkg.add_header("PAYLOAD_CONTENT_TYPE", "CONTENT_TYPE_SEKIRO_FAST_JSON")
         response_pkg.data = _encode_sekiro_fast_json(common_res)
-        response_pkg.write_to(self._stream)
+        self.io_loop.call_later(0, lambda: response_pkg.write_to(self._stream))
+
         message = "{\"status\":" + str(common_res.status) + ",\"message\":" + json.dumps(
             common_res.message, ensure_ascii=False) + ",\"data\":" + json.dumps(common_res.data,
                                                                                 ensure_ascii=False) + "}"
@@ -93,7 +95,7 @@ for more support please visit our website: https://iinti.cn""")
         if sekiro_packet.message_type != 0x20:
             print("unknown server msg:%d", sekiro_packet.message_type)
             return
-        sekiro_response = SekiroResponse(stream, sekiro_packet.seq)
+        sekiro_response = SekiroResponse(stream, sekiro_packet.seq, self.io_loop)
         if sekiro_packet.data is None:
             sekiro_response.failed("sekiro system error, no request payload present!!")
             return
