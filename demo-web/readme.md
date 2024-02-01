@@ -31,7 +31,7 @@ client.registerAction("testAction", function (request, resolve, reject) {
 ``wss://sekiro.iinti.cn:5612/business/register?group=test_web&clientId=``
 
 - **请注意，如果是https网站，则需必须使用wss://协议，开源版本需要自行使用nginx之类的中间件完成wss的支持**
-- **浏览器对于数据访问有比较多的权限控制，对于有一些存在csp拦截的网站，请参考web环境ssl注入相关指引：[sslForWebsocket](../02_advance/03_sslForWebsocket.md)**
+- **浏览器对于数据访问有比较多的权限控制，对于有一些存在csp拦截的网站，请参考web环境ssl注入相关指引：[sslForWebsocket](https://sekiro.iinti.cn/sekiro-doc/02_advance/03_sslForWebsocket.html)**
 
 ### Sekiro处理器
 
