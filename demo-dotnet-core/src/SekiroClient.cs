@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -78,7 +79,7 @@ namespace SekiroClientDotnet
                     {
                         // 启动后发送注册包
                         await SendRegToServer(netStream);
-                        while (netStream.CanRead)
+                        while (true)
                         {
                             // 检查MagicMsg
                             await CheckMagicMsg();
@@ -96,12 +97,19 @@ namespace SekiroClientDotnet
                         }
                     }
                 }
+                catch (IOException ex) when (ex.InnerException is SocketException se && se.SocketErrorCode == SocketError.ConnectionReset)
+                {
+                    Serilog.Log.Error($"Connection reset, error: {ex?.ToString()}, {ex.StackTrace}");
+
+                }
                 catch (Exception ex)
                 {
                     Serilog.Log.Error($"something wrong,err:{ex?.ToString()},{ex.StackTrace}");
+
                 }
                 finally
                 {
+                    netStream?.Dispose();
                     Serilog.Log.Warning($"restart client.");
                     await Task.Delay(5000);  // Wait for 5 seconds before reconnecting  
                 }
