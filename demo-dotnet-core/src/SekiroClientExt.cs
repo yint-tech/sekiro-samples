@@ -19,6 +19,7 @@ namespace SekiroClientDotnet
             string magicMsg = await ReadMagicMsg(netStream);
             if (magicMsg != SekiroConstant.Magic)
             {
+                Serilog.Log.Warning($"rev magicMsg fail,restart it, magicMsg:{magicMsg}");
                 throw new Exception($"rev magicMsg fail,restart it, magicMsg:{magicMsg}");
             }
         }
@@ -28,7 +29,7 @@ namespace SekiroClientDotnet
             int totalLength = await ReadTotalLength(netStream);
             byte[] packetBuffer = await ReadPacketBuffer(netStream, totalLength);
             var sekiroPacket = SekiroPacket.ToSekiroPacket(packetBuffer, totalLength);
-            Console.WriteLine($"rev message, seq :{sekiroPacket.Seq},type:{sekiroPacket.MessageType}");
+            Serilog.Log.Information($"rev message, seq :{sekiroPacket.Seq},type:{sekiroPacket.MessageType}");
             return sekiroPacket;
         }
 
@@ -40,8 +41,7 @@ namespace SekiroClientDotnet
         {
             var heartbeatBuffer = sekiroPacket.ToBuffer();
             await netStream.WriteAsync(heartbeatBuffer, 0, heartbeatBuffer.Length);
-            Console.WriteLine("reply heartbeat successfully.");
-
+            Serilog.Log.Information("reply heartbeat successfully.");
         }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace SekiroClientDotnet
         {
             var buffer = SekiroPacket.GetRegPacketBuffer(this.groupName, this.clientId);
             await netStream.WriteAsync(buffer, 0, buffer.Length);
-            Console.WriteLine("send reg packet successfully.");
+            Serilog.Log.Information("send reg packet successfully.");
         }
 
         /// <summary>

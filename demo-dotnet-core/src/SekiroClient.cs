@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -49,7 +48,7 @@ namespace SekiroClientDotnet
             this.groupName = groupName;
             this.clientId = !string.IsNullOrEmpty(clientId) ? clientId : Guid.NewGuid().ToString();
             this.FuncList = new Dictionary<string, Func<JToken, Task<byte[]>>>();
-            Console.WriteLine($"SekiroClient init finish,clientId:{this.clientId}");
+            Serilog.Log.Information($"SekiroClient init finish,clientId:{this.clientId}");
 
         }
 
@@ -67,54 +66,59 @@ namespace SekiroClientDotnet
 
         public async Task Start()
         {
-            try
+            while (true)
             {
-                // Create TCP client and connect
-                // Then get the netStream and pass it
-                // To our StreamWriter and StreamReader
-                using (var tcpClient = new TcpClient(this.serverHost, this.serverPort))
-                using (netStream = tcpClient.GetStream())
+                try
                 {
-                    // 启动后发送注册包
-                    await SendRegToServer(netStream);
-                    while (netStream.CanRead)
+                    // Create TCP client and connect
+                    // Then get the netStream and pass it
+                    // To our StreamWriter and StreamReader
+                    using (var tcpClient = new TcpClient(this.serverHost, this.serverPort))
+                    using (netStream = tcpClient.GetStream())
                     {
-                        // 检查MagicMsg
-                        await CheckMagicMsg();
-                        SekiroPacket sekiroPacket = await ReadPacket();
-                        if (sekiroPacket.MessageType == MessageTypes.Heartbeat)
+                        // 启动后发送注册包
+                        await SendRegToServer(netStream);
+                        while (netStream.CanRead)
                         {
-                            await ReportHeartbeatMsg(netStream, sekiroPacket);
-                            continue;
+                            // 检查MagicMsg
+                            await CheckMagicMsg();
+                            SekiroPacket sekiroPacket = await ReadPacket();
+                            if (sekiroPacket.MessageType == MessageTypes.Heartbeat)
+                            {
+                                await ReportHeartbeatMsg(netStream, sekiroPacket);
+                                continue;
+                            }
+                            var actionResult = await ExecFunc(sekiroPacket);
+                            SekiroPacket replyMsg = ToReplyPacket(sekiroPacket, actionResult);
+                            var respBuffer = replyMsg.ToBuffer();
+                            await netStream.WriteAsync(respBuffer, 0, respBuffer.Length);
+                            Serilog.Log.Information($"send seq :{sekiroPacket.Seq} response successfully.");
                         }
-                        var funcResult = await ExecFunc(sekiroPacket);
-                        var replyMsg = new SekiroPacket(MessageTypes.SendToServer, sekiroPacket.Seq);
-                        replyMsg.Headers.Add("PAYLOAD_CONTENT_TYPE", "PAYLOAD_CONTENT_TYPE");
-                        replyMsg.Headers.Add("SEKIRO_GROUP", this.groupName);
-                        replyMsg.Headers.Add("SEKIRO_CLIENT_ID", this.clientId);
-                        replyMsg.Headers.Add("contentType", "application/json");
-                        replyMsg.Data = funcResult;
-                        var respBuffer = replyMsg.ToBuffer();
-                        await netStream.WriteAsync(respBuffer, 0, respBuffer.Length);
-                        Console.WriteLine($"send seq :{sekiroPacket.Seq} response successfully.");
-
                     }
                 }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Error($"something wrong,err:{ex?.ToString()},{ex.StackTrace}");
+                }
+                finally
+                {
+                    Serilog.Log.Warning($"restart client.");
+                    await Task.Delay(5000);  // Wait for 5 seconds before reconnecting  
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"something wrong,err:{ex?.ToString()},{ex.StackTrace}");
-            }
-            finally
-            {
-                Console.WriteLine($"restart client.");
-                await Start();
-            }
-
 
         }
 
-
+        private SekiroPacket ToReplyPacket(SekiroPacket sekiroPacket, byte[] funcResult)
+        {
+            var replyMsg = new SekiroPacket(MessageTypes.SendToServer, sekiroPacket.Seq);
+            replyMsg.Headers.Add("PAYLOAD_CONTENT_TYPE", "PAYLOAD_CONTENT_TYPE");
+            replyMsg.Headers.Add("SEKIRO_GROUP", this.groupName);
+            replyMsg.Headers.Add("SEKIRO_CLIENT_ID", this.clientId);
+            replyMsg.Headers.Add("contentType", "application/json");
+            replyMsg.Data = funcResult;
+            return replyMsg;
+        }
     }
 }
 
