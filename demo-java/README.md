@@ -79,3 +79,7 @@ public class Demo1_SingleServer {
 }
 
 ```
+
+## 安卓测集成说明
+
+- 安卓9之后主进程不允许直接开启网络请求，需要开启独立线程进行SekiroClient初始化
