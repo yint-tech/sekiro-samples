@@ -154,5 +154,6 @@ class AbsSekiroConn:
                     self.handle_packet(sekiro_packet, stream)
             except iostream.StreamClosedError:
                 print("connection lost, prepare reconnect")
+            self._active = False
             print("wait reconnect after 3 second")
             yield time.sleep(3)
