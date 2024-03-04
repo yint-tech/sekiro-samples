@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 
 from tornado import ioloop, gen, iostream
 from tornado.tcpclient import TCPClient
@@ -125,33 +126,33 @@ class AbsSekiroConn:
             return
         self._active = True
         self.io_loop = ioloop.IOLoop.current()
-        print("begin connect to " + self._host + ":" + str(self._port))
-        stream = yield TCPClient().connect(self._host, self._port)
-        self.now_stream = stream
-        try:
-            # write a register cmd to sekiro server
-            self.make_register_pkg().write_to(stream)
-            while True:
-                magic_b = yield stream.read_bytes(8)
-                magic = _bytes_to_int(magic_b)
-                if magic != _MAGIC:
-                    print("protocol error,magic1 expected:%d actually: %d", _MAGIC, magic)
-                    stream.close()
-                    break
-                body_length_b = yield stream.read_bytes(4)
-                body_length = _bytes_to_int(body_length_b)
+        while True:
+            print("begin connect to " + self._host + ":" + str(self._port))
+            stream = yield TCPClient().connect(self._host, self._port)
+            self.now_stream = stream
+            try:
+                # write a register cmd to sekiro server
+                self.make_register_pkg().write_to(stream)
+                while True:
+                    magic_b = yield stream.read_bytes(8)
+                    magic = _bytes_to_int(magic_b)
+                    if magic != _MAGIC:
+                        print("protocol error,magic1 expected:%d actually: %d", _MAGIC, magic)
+                        stream.close()
+                        break
+                    body_length_b = yield stream.read_bytes(4)
+                    body_length = _bytes_to_int(body_length_b)
 
-                body_data = yield stream.read_bytes(body_length)
+                    body_data = yield stream.read_bytes(body_length)
 
-                sekiro_packet = _SekiroPacket()
-                sekiro_packet.read_from(body_data)
-                if sekiro_packet.message_type == 0x00:
-                    # this is heartbeat pkg
-                    sekiro_packet.write_to(stream)
-                    continue
-                self.handle_packet(sekiro_packet, stream)
-        except iostream.StreamClosedError:
-            print("connection lost, prepare reconnect")
-
-        self._active = False
-        self.io_loop.call_later(3, self.loop)
+                    sekiro_packet = _SekiroPacket()
+                    sekiro_packet.read_from(body_data)
+                    if sekiro_packet.message_type == 0x00:
+                        # this is heartbeat pkg
+                        sekiro_packet.write_to(stream)
+                        continue
+                    self.handle_packet(sekiro_packet, stream)
+            except iostream.StreamClosedError:
+                print("connection lost, prepare reconnect")
+            print("wait reconnect after 3 second")
+            yield time.sleep(3)
