@@ -9,9 +9,11 @@ internal class Program
 {
     private static async Task Main(string[] args)
     {
-        Serilog.Log.Logger =new LoggerConfiguration().WriteTo.Console().CreateLogger();
+        // var logFile = $"sekiro_client_{DateTime.Now.ToString("yyyyMMddHHmmss")}.log";
+        // Serilog.Log.Logger = new LoggerConfiguration().WriteTo.File(logFile).CreateLogger();
+        Serilog.Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
         var sekiroClient = new SekiroClient(
-            host: "sekiro.iinti.cn",
+            host: "sekiro.ipbong.com",
             port: 5612,
             groupName: "test-dotnet");
         sekiroClient.AddAction("testAction", (JToken request) =>
