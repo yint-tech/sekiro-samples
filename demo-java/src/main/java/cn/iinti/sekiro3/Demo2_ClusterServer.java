@@ -8,11 +8,13 @@ import cn.iinti.sekiro3.business.api.interfaze.SekiroResponse;
 public class Demo2_ClusterServer {
     public static void main(String[] args) throws InterruptedException {
         //   http://sekiro.iinti.cn/business/invoke?group=test_group_02&action=testAction&param=testparm
-        String[] serverList = new String[]{"sekiro.iinti.cn:5621", "sekiro.virjar.com:5612"};
+        String[] serverList = new String[]{
+            "sekiro-prod1.iinti.cn:5612", 
+            "sekiro-prod2.iinti.cn:5612"};
         // 集群版本直接传入多个服务器列表，即可使用多台sekiro服务器做高可用备份
         // 请注意集群版本下consumer存在配置，使用nginx或者invoker，更多信息请参考文档关于sekiro集群ha相关内容
 
-        new ClusterSekiroClient("test", serverList)
+        new ClusterSekiroClient("java_test", serverList)
                 .setupSekiroRequestInitializer((sekiroRequest, handlerRegistry) ->
                         // 注册一个接口，名为testAction
                         handlerRegistry.registerSekiroHandler(new ActionHandler() {
