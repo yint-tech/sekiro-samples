@@ -49,3 +49,7 @@ client.registerAction("testAction",
 - request代表的请求参数：如``group=test_web&action=testAction&param=testparm``,则上述代码可以通过``request``获取到这些参数：``console.log(request.param)``
 - 返回成功数据：``resolve(xxxx);``其中xxxx代表你想返回的任意正确数据内容
 - 返回错误数据：``reject("错误ddd");``，reject函数调用需要是一个字符串。框架通过成功和失败在中心服务器提供简单的统计功能
+
+## 油猴脚本集成
+
+参考: [](./blt.js)
