@@ -2,9 +2,38 @@
 
 主要场景：
 
-在家庭电脑提供java的API服务，外报给其他业务使用
+在内网电脑提供java的API服务，外漏给其他业务使用
 
 ## 样例代码
+
+
+maven仓库
+
+```xml
+    <dependencies>
+        <dependency>
+            <groupId>cn.iinti.sekiro3.business</groupId>
+            <artifactId>sekiro-business-api</artifactId>
+            <version>1.6</version>
+        </dependency>
+    </dependencies>
+
+    <repositories>
+        <repository>
+            <id>int-public</id>
+            <name>int public maven</name>
+            <url>https://nexus.iinti.cn/repository/maven-public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+```
+
+代码集成
 
 ```java
 package cn.iinti.sekiro3;
@@ -83,3 +112,14 @@ public class Demo1_SingleServer {
 ## 安卓测集成说明
 
 - 安卓9之后主进程不允许直接开启网络请求，需要开启独立线程进行SekiroClient初始化
+
+## android sdk集成报错请参考
+
+```gradle
+packaging {
+        resources {
+            excludes.add("META-INF/INDEX.LIST")
+            excludes.add("META-INF/io.netty.versions.properties")
+        }
+    }
+```
