@@ -10,6 +10,10 @@ function SekiroClient(wsURL) {
     this.connect()
 }
 
+function logToConsole(msg) {
+    console.log(`${new Date().toISOString()} ${msg}`);
+}
+
 SekiroClient.prototype.resolveWebSocketFactory = function () {
     if (typeof window === 'object') {
         var theWebSocket = window.WebSocket ? window.WebSocket : window.MozWebSocket;
@@ -44,9 +48,9 @@ SekiroClient.prototype.resolveWebSocketFactory = function () {
     if (typeof weex === 'object') {
         // this is weex env : https://weex.apache.org/zh/docs/modules/websockets.html
         try {
-            console.log("test webSocket for weex");
+            logToConsole("test webSocket for weex");
             var ws = weex.requireModule('webSocket');
-            console.log("find webSocket for weex:" + ws);
+            logToConsole("find webSocket for weex:" + ws);
             return function (wsURL) {
                 try {
                     ws.close();
@@ -71,12 +75,16 @@ SekiroClient.prototype.resolveWebSocketFactory = function () {
 };
 
 SekiroClient.prototype.connect = function () {
-    console.log('sekiro: begin of connect to wsURL: ' + this.wsURL);
+    logToConsole('sekiro: begin of connect to wsURL: ' + this.wsURL);
     var _this = this;
     try {
         this.socket = this.webSocketFactory(this.wsURL);
+        this.socket.onping = function (e) {
+            logToConsole(`sekiro onping,e:${e}`);
+            socket.pong();
+        }
     } catch (e) {
-        console.log("sekiro: create connection failed,reconnect after 2s:" + e);
+        logToConsole("sekiro: create connection failed,reconnect after 2s:" + e);
         setTimeout(function () {
             _this.connect()
         }, 2000)
@@ -88,19 +96,25 @@ SekiroClient.prototype.connect = function () {
     });
 
     this.socket.onopen(function (event) {
-        console.log('sekiro: open a sekiro client connection')
+        var msg = JSON.stringify(event);
+        logToConsole(`sekiro: open a sekiro client connection,event:${msg}`);
     });
 
     this.socket.onclose(function (event) {
-        console.log('sekiro: disconnected ,reconnection after 2s');
+        var msg = JSON.stringify(event);
+        logToConsole(`sekiro: disconnected ,reconnection after 2s,event:${msg}`);
         setTimeout(function () {
             _this.connect()
         }, 2000)
     });
+    this.socket.onerror = function (event) {
+        var msg = JSON.stringify(event);
+        logToConsole(`sekiro: error: ` + msg);
+    }
 };
 
 SekiroClient.prototype.handleSekiroRequest = function (requestJson) {
-    console.log("receive sekiro request: " + requestJson);
+    //logToConsole("receive sekiro request: " + requestJson);
     var request = JSON.parse(requestJson);
     var seq = request['__sekiro_seq__'];
 
@@ -127,7 +141,7 @@ SekiroClient.prototype.handleSekiroRequest = function (requestJson) {
             _this.sendFailed(seq, errorMessage)
         })
     } catch (e) {
-        console.log("error: " + e);
+        logToConsole("error: " + e);
         _this.sendFailed(seq, ":" + e);
     }
 };
@@ -164,7 +178,7 @@ SekiroClient.prototype.sendSuccess = function (seq, response) {
     }
     responseJson['__sekiro_seq__'] = seq;
     var responseText = JSON.stringify(responseJson);
-    console.log("response :" + responseText);
+    //logInfo("response :" + responseText);
     this.socket.send(responseText);
 };
 
@@ -177,7 +191,7 @@ SekiroClient.prototype.sendFailed = function (seq, errorMessage) {
     responseJson['status'] = -1;
     responseJson['__sekiro_seq__'] = seq;
     var responseText = JSON.stringify(responseJson);
-    console.log("sekiro: response :" + responseText);
+    logToConsole("sekiro: response :" + responseText);
     this.socket.send(responseText)
 };
 
@@ -188,8 +202,7 @@ SekiroClient.prototype.registerAction = function (action, handler) {
     if (typeof handler !== 'function') {
         throw new Error("a handler must be function");
     }
-    console.log("sekiro: register action: " + action);
+    logToConsole("sekiro: register action: " + action);
     this.handlers[action] = handler;
     return this;
 };
-
