@@ -1,0 +1,32 @@
+{
+  "name": "sekiro-client-nodejs",
+  "version": "1.0.0",
+  "description": "Node.js client SDK for Sekiro RPC framework",
+  "main": "sekiro/SekiroClient.js",
+  "scripts": {
+    "test": "node test.js",
+    "start": "node test.js"
+  },
+  "keywords": [
+    "sekiro",
+    "rpc",
+    "framework",
+    "distributed",
+    "microservice",
+    "remote-procedure-call"
+  ],
+  "author": "Sekiro Team",
+  "license": "MIT",
+  "dependencies": {
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iinti/sekiro-samples.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iinti/sekiro-samples/issues"
+  },
+  "homepage": "https://sekiro.iinti.cn/"
+}

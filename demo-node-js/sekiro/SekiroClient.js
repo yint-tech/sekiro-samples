@@ -1,0 +1,289 @@
+/**
+ * Node.js版Sekiro客户端
+ */
+const net = require('net');
+const { v4: uuidv4 } = require('uuid');
+const { SekiroPacket, CommonRes, MessageType, MAGIC } = require('./SekiroCommon');
+
+class SekiroResponse {
+    constructor(connection, seq) {
+        this.connection = connection;
+        this.seq = seq;
+        this.responded = false;
+    }
+
+    success(data) {
+        this._response(new CommonRes().ok(data));
+    }
+
+    failed(message) {
+        this._response(new CommonRes().failed(message));
+    }
+
+    _response(commonRes) {
+        if (this.responded) {
+            return;
+        }
+        this.responded = true;
+
+        const responsePkg = new SekiroPacket()
+            .addHeader("PAYLOAD_CONTENT_TYPE", "CONTENT_TYPE_SEKIRO_FAST_JSON");
+        
+        responsePkg.messageType = MessageType.CTypeInvokeResponse;
+        responsePkg.seq = this.seq;
+        responsePkg.data = commonRes.encodeSekiroFastJson();
+
+        this.connection.write(responsePkg.encode());
+
+        const message = JSON.stringify({
+            status: commonRes.status,
+            message: commonRes.message,
+            data: commonRes.data
+        });
+
+        console.log('sekiro response: ', message);
+    }
+}
+
+class SekiroHandler {
+    /**
+     * 处理请求的方法
+     * @param {Object} request - 请求参数
+     * @param {SekiroResponse} response - 响应对象
+     */
+    handle(request, response) {
+        // 子类需要实现此方法
+    }
+}
+
+class SekiroClient {
+    constructor(group, options = {}) {
+        const {
+            host = 'sekiro.iinti.cn',
+            port = 5612,
+            clientId = null
+        } = options;
+
+        this.group = group;
+        this.host = host;
+        this.port = port;
+        this.clientId = clientId || uuidv4();
+        this.handlers = {};
+        this.active = false;
+        this.connection = null;
+        this.reconnectInterval = 5000; // 重连间隔5秒
+
+        console.log(`       welcome to use sekiro framework
+for more support please visit our website: https://iinti.cn`);
+    }
+
+    /**
+     * 注册动作处理器
+     */
+    registerAction(action, handler) {
+        if (!(handler instanceof SekiroHandler)) {
+            throw new Error('Handler must be an instance of SekiroHandler');
+        }
+        this.handlers[action] = handler;
+        return this;
+    }
+
+    /**
+     * 创建注册包
+     */
+    makeRegisterPkg() {
+        const registerCmd = new SekiroPacket();
+        registerCmd.messageType = MessageType.CTypeRegister;
+        registerCmd.seq = -1;
+        registerCmd.addHeader("SEKIRO_GROUP", this.group);
+        registerCmd.addHeader("SEKIRO_CLIENT_ID", this.clientId);
+        return registerCmd;
+    }
+
+    /**
+     * 处理接收到的数据包
+     */
+    handlePacket(sekiroPacket, connection) {
+        // 心跳包处理
+        if (sekiroPacket.messageType === MessageType.TypeHeartbeat) {
+            // 回复心跳包
+            connection.write(sekiroPacket.encode());
+            return;
+        }
+
+        // 只处理调用类型的包
+        if (sekiroPacket.messageType !== MessageType.STypeInvoke) {
+            console.log(`unknown server msg type: ${sekiroPacket.messageType}`);
+            return;
+        }
+
+        const sekiroResponse = new SekiroResponse(connection, sekiroPacket.seq);
+
+        if (!sekiroPacket.data) {
+            sekiroResponse.failed("sekiro system error, no request payload present!!");
+            return;
+        }
+
+        try {
+            const requestStr = sekiroPacket.data.toString('utf-8');
+            console.log('sekiro receive request: ', requestStr);
+            
+            const request = JSON.parse(requestStr);
+            const action = request.action;
+
+            if (!action) {
+                sekiroResponse.failed("the param: {action} not presented!!");
+                return;
+            }
+
+            const handler = this.handlers[action];
+            if (!handler) {
+                sekiroResponse.failed("sekiro no handler for this action: " + action);
+                return;
+            }
+
+            // 异步处理请求，避免阻塞
+            setImmediate(() => {
+                try {
+                    handler.handle(request, sekiroResponse);
+                } catch (error) {
+                    console.error("Error handling request:", error);
+                    sekiroResponse.failed("failed: " + error.message);
+                }
+            });
+        } catch (error) {
+            console.error("Error processing request:", error);
+            sekiroResponse.failed("failed to parse request: " + error.message);
+        }
+    }
+
+    /**
+     * 启动客户端
+     */
+    start() {
+        if (this.active) {
+            return this;
+        }
+
+        this.active = true;
+        this._connect();
+        return this;
+    }
+
+    /**
+     * 建立连接
+     */
+    _connect() {
+        if (!this.active) {
+            return;
+        }
+
+        console.log(`begin connect to ${this.host}:${this.port} with clientId: ${this.clientId}`);
+
+        const connection = net.createConnection({
+            host: this.host,
+            port: this.port
+        });
+
+        connection.on('connect', () => {
+            console.log('Connected to sekiro server');
+            this.connection = connection;
+
+            // 发送注册命令
+            const registerPkg = this.makeRegisterPkg();
+            connection.write(registerPkg.encode());
+        });
+
+        connection.on('data', (data) => {
+            this._handleData(data, connection);
+        });
+
+        connection.on('error', (err) => {
+            console.log('Connection error:', err.message);
+        });
+
+        connection.on('close', () => {
+            console.log('Connection closed, prepare to reconnect');
+            this.connection = null;
+            if (this.active) {
+                setTimeout(() => {
+                    if (this.active) {
+                        this._connect();
+                    }
+                }, this.reconnectInterval);
+            }
+        });
+    }
+
+    /**
+     * 处理接收的数据
+     */
+    _handleData(data, connection) {
+        // 首先检查是否有足够的数据来读取MAGIC和长度
+        if (data.length < 12) { // 8 bytes magic + 4 bytes length
+            console.error('Received data is too short');
+            return;
+        }
+
+        // 读取并验证MAGIC
+        const magicBuffer = data.slice(0, 8);
+        const magic = magicBuffer.readBigInt64BE();
+
+        if (magic !== MAGIC) {
+            console.error(`Protocol error, magic expected: ${MAGIC}, actually: ${magic}`);
+            connection.destroy();
+            return;
+        }
+
+        // 读取body长度
+        const bodyLength = data.readInt32BE(8);
+
+        // 检查是否接收到了完整的包
+        if (data.length < 12 + bodyLength) {
+            console.error('Incomplete packet received');
+            return;
+        }
+
+        // 提取body数据
+        const bodyData = data.slice(12, 12 + bodyLength);
+
+        // 解析数据包
+        const sekiroPacket = SekiroPacket.decode(bodyData);
+
+        // 处理数据包
+        this.handlePacket(sekiroPacket, connection);
+
+        // 如果还有剩余数据，递归处理（粘包处理）
+        const remainingData = data.slice(12 + bodyLength);
+        if (remainingData.length > 0) {
+            setImmediate(() => {
+                this._handleData(remainingData, connection);
+            });
+        }
+    }
+
+    /**
+     * 停止客户端
+     */
+    stop() {
+        this.active = false;
+        if (this.connection) {
+            this.connection.destroy();
+            this.connection = null;
+        }
+        return this;
+    }
+
+    /**
+     * 检查客户端是否活跃
+     */
+    isActive() {
+        return this.active && this.connection && !this.connection.destroyed;
+    }
+}
+
+module.exports = {
+    SekiroClient,
+    SekiroHandler,
+    SekiroResponse
+};
