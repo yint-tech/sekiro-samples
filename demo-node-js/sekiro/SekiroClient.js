@@ -2,8 +2,15 @@
  * Node.js版Sekiro客户端
  */
 const net = require('net');
-const { v4: uuidv4 } = require('uuid');
-const { SekiroPacket, CommonRes, MessageType, MAGIC } = require('./SekiroCommon');
+const {
+    v4: uuidv4
+} = require('uuid');
+const {
+    SekiroPacket,
+    CommonRes,
+    MessageType,
+    MAGIC
+} = require('./SekiroCommon');
 
 class SekiroResponse {
     constructor(connection, seq) {
@@ -28,7 +35,7 @@ class SekiroResponse {
 
         const responsePkg = new SekiroPacket()
             .addHeader("PAYLOAD_CONTENT_TYPE", "CONTENT_TYPE_SEKIRO_FAST_JSON");
-        
+
         responsePkg.messageType = MessageType.CTypeInvokeResponse;
         responsePkg.seq = this.seq;
         responsePkg.data = commonRes.encodeSekiroFastJson();
@@ -60,8 +67,8 @@ class SekiroClient {
     constructor(group, options = {}) {
         const {
             host = 'sekiro.iinti.cn',
-            port = 5612,
-            clientId = null
+                port = 5612,
+                clientId = null
         } = options;
 
         this.group = group;
@@ -72,6 +79,7 @@ class SekiroClient {
         this.active = false;
         this.connection = null;
         this.reconnectInterval = 5000; // 重连间隔5秒
+        this.buffer = Buffer.alloc(0); // 数据缓冲区，用于处理粘包和拆包
 
         console.log(`       welcome to use sekiro framework
 for more support please visit our website: https://iinti.cn`);
@@ -127,7 +135,7 @@ for more support please visit our website: https://iinti.cn`);
         try {
             const requestStr = sekiroPacket.data.toString('utf-8');
             console.log('sekiro receive request: ', requestStr);
-            
+
             const request = JSON.parse(requestStr);
             const action = request.action;
 
@@ -188,6 +196,7 @@ for more support please visit our website: https://iinti.cn`);
         connection.on('connect', () => {
             console.log('Connected to sekiro server');
             this.connection = connection;
+            this.buffer = Buffer.alloc(0); // 重置缓冲区
 
             // 发送注册命令
             const registerPkg = this.makeRegisterPkg();
@@ -205,6 +214,7 @@ for more support please visit our website: https://iinti.cn`);
         connection.on('close', () => {
             console.log('Connection closed, prepare to reconnect');
             this.connection = null;
+            this.buffer = Buffer.alloc(0); // 重置缓冲区
             if (this.active) {
                 setTimeout(() => {
                     if (this.active) {
@@ -219,46 +229,66 @@ for more support please visit our website: https://iinti.cn`);
      * 处理接收的数据
      */
     _handleData(data, connection) {
-        // 首先检查是否有足够的数据来读取MAGIC和长度
-        if (data.length < 12) { // 8 bytes magic + 4 bytes length
-            console.error('Received data is too short');
-            return;
-        }
+        // 将新接收的数据追加到缓冲区
+        this.buffer = Buffer.concat([this.buffer, data]);
 
-        // 读取并验证MAGIC
-        const magicBuffer = data.slice(0, 8);
-        const magic = magicBuffer.readBigInt64BE();
+        // 循环处理缓冲区中的完整数据包
+        while (this.buffer.length >= 12) { // 至少需要 8 bytes magic + 4 bytes length
+            // 读取并验证MAGIC
+            const magicBuffer = this.buffer.slice(0, 8);
+            const magic = magicBuffer.readBigInt64BE();
 
-        if (magic !== MAGIC) {
-            console.error(`Protocol error, magic expected: ${MAGIC}, actually: ${magic}`);
-            connection.destroy();
-            return;
-        }
+            if (magic !== MAGIC) {
+                console.error(`Protocol error, magic expected: ${MAGIC}, actually: ${magic}`);
+                // 尝试查找下一个可能的MAGIC位置（简单的错误恢复）
+                const magicIndex = this.buffer.indexOf(MAGIC_BUFFER, 1);
+                if (magicIndex > 0) {
+                    console.log(`Trying to recover by skipping ${magicIndex} bytes`);
+                    this.buffer = this.buffer.slice(magicIndex);
+                    continue;
+                } else {
+                    // 如果找不到有效的MAGIC，清空缓冲区
+                    console.error('Cannot recover from protocol error, clearing buffer');
+                    this.buffer = Buffer.alloc(0);
+                    connection.destroy();
+                    return;
+                }
+            }
 
-        // 读取body长度
-        const bodyLength = data.readInt32BE(8);
+            // 读取body长度
+            const bodyLength = this.buffer.readInt32BE(8);
 
-        // 检查是否接收到了完整的包
-        if (data.length < 12 + bodyLength) {
-            console.error('Incomplete packet received');
-            return;
-        }
+            // 检查body长度是否合理（防止恶意数据）
+            if (bodyLength < 0 || bodyLength > 10 * 1024 * 1024) { // 最大10MB
+                console.error(`Invalid body length: ${bodyLength}`);
+                this.buffer = Buffer.alloc(0);
+                connection.destroy();
+                return;
+            }
 
-        // 提取body数据
-        const bodyData = data.slice(12, 12 + bodyLength);
+            // 检查是否接收到了完整的包
+            const totalPacketLength = 12 + bodyLength;
+            if (this.buffer.length < totalPacketLength) {
+                // 数据不完整，等待更多数据
+                return;
+            }
 
-        // 解析数据包
-        const sekiroPacket = SekiroPacket.decode(bodyData);
+            // 提取body数据
+            const bodyData = this.buffer.slice(12, 12 + bodyLength);
 
-        // 处理数据包
-        this.handlePacket(sekiroPacket, connection);
+            try {
+                // 解析数据包
+                const sekiroPacket = SekiroPacket.decode(bodyData);
 
-        // 如果还有剩余数据，递归处理（粘包处理）
-        const remainingData = data.slice(12 + bodyLength);
-        if (remainingData.length > 0) {
-            setImmediate(() => {
-                this._handleData(remainingData, connection);
-            });
+                // 处理数据包
+                this.handlePacket(sekiroPacket, connection);
+            } catch (error) {
+                console.error('Error decoding packet:', error);
+                // 跳过这个包，继续处理下一个
+            }
+
+            // 从缓冲区中移除已处理的数据
+            this.buffer = this.buffer.slice(totalPacketLength);
         }
     }
 
