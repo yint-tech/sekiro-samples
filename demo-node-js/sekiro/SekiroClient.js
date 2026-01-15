@@ -80,6 +80,9 @@ class SekiroClient {
         this.connection = null;
         this.reconnectInterval = 5000; // 重连间隔5秒
         this.buffer = Buffer.alloc(0); // 数据缓冲区，用于处理粘包和拆包
+        this.lastPacketTime = Date.now(); // 记录最后收到数据包的时间
+        this.heartbeatCheckInterval = null; // 心跳检测定时器
+        this.heartbeatTimeout = 60000; // 心跳超时时间，1分钟
 
         console.log(`       welcome to use sekiro framework
 for more support please visit our website: https://iinti.cn`);
@@ -112,6 +115,9 @@ for more support please visit our website: https://iinti.cn`);
      * 处理接收到的数据包
      */
     handlePacket(sekiroPacket, connection) {
+        // 更新最后数据包时间，因为收到了新的数据包
+        this.lastPacketTime = Date.now();
+        
         // 心跳包处理
         if (sekiroPacket.messageType === MessageType.TypeHeartbeat) {
             // 回复心跳包
@@ -135,7 +141,7 @@ for more support please visit our website: https://iinti.cn`);
         try {
             const requestStr = sekiroPacket.data.toString('utf-8');
             console.log('sekiro receive request: ', requestStr);
-
+            
             const request = JSON.parse(requestStr);
             const action = request.action;
 
@@ -174,8 +180,52 @@ for more support please visit our website: https://iinti.cn`);
         }
 
         this.active = true;
+        this._startHeartbeatCheck(); // 启动心跳检测
         this._connect();
         return this;
+    }
+
+    /**
+     * 停止客户端
+     */
+    stop() {
+        this.active = false;
+        this._stopHeartbeatCheck(); // 停止心跳检测
+        if (this.connection) {
+            this.connection.destroy();
+            this.connection = null;
+        }
+        return this;
+    }
+
+    /**
+     * 启动心跳检测
+     */
+    _startHeartbeatCheck() {
+        if (this.heartbeatCheckInterval) {
+            clearInterval(this.heartbeatCheckInterval);
+        }
+        
+        this.heartbeatCheckInterval = setInterval(() => {
+            const now = Date.now();
+            if (now - this.lastPacketTime > this.heartbeatTimeout) {
+                console.log(`Heartbeat timeout: no packet received for ${now - this.lastPacketTime}ms, closing connection...`);
+                if (this.connection) {
+                    this.connection.destroy();
+                    this.connection = null;
+                }
+            }
+        }, 15000); // 每15秒检查一次
+    }
+
+    /**
+     * 停止心跳检测
+     */
+    _stopHeartbeatCheck() {
+        if (this.heartbeatCheckInterval) {
+            clearInterval(this.heartbeatCheckInterval);
+            this.heartbeatCheckInterval = null;
+        }
     }
 
     /**
@@ -197,6 +247,7 @@ for more support please visit our website: https://iinti.cn`);
             console.log('Connected to sekiro server');
             this.connection = connection;
             this.buffer = Buffer.alloc(0); // 重置缓冲区
+            this.lastPacketTime = Date.now(); // 重置最后数据包时间
 
             // 发送注册命令
             const registerPkg = this.makeRegisterPkg();
@@ -280,18 +331,6 @@ for more support please visit our website: https://iinti.cn`);
             // 从缓冲区中移除已处理的数据
             this.buffer = this.buffer.slice(totalPacketLength);
         }
-    }
-
-    /**
-     * 停止客户端
-     */
-    stop() {
-        this.active = false;
-        if (this.connection) {
-            this.connection.destroy();
-            this.connection = null;
-        }
-        return this;
     }
 
     /**
