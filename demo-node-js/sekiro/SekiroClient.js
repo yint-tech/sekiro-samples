@@ -235,28 +235,18 @@ for more support please visit our website: https://iinti.cn`);
         // 循环处理缓冲区中的完整数据包
         while (this.buffer.length >= 12) { // 至少需要 8 bytes magic + 4 bytes length
             // 读取并验证MAGIC
-            const magicBuffer = this.buffer.slice(0, 8);
-            const magic = magicBuffer.readBigInt64BE();
+            const headBuffer = this.buffer.slice(0, 12);
+            const magic = headBuffer.readBigInt64BE();
 
             if (magic !== MAGIC) {
                 console.error(`Protocol error, magic expected: ${MAGIC}, actually: ${magic}`);
-                // 尝试查找下一个可能的MAGIC位置（简单的错误恢复）
-                const magicIndex = this.buffer.indexOf(MAGIC_BUFFER, 1);
-                if (magicIndex > 0) {
-                    console.log(`Trying to recover by skipping ${magicIndex} bytes`);
-                    this.buffer = this.buffer.slice(magicIndex);
-                    continue;
-                } else {
-                    // 如果找不到有效的MAGIC，清空缓冲区
-                    console.error('Cannot recover from protocol error, clearing buffer');
-                    this.buffer = Buffer.alloc(0);
-                    connection.destroy();
-                    return;
-                }
+                this.buffer = Buffer.alloc(0);
+                connection.destroy();
+                return;
             }
 
             // 读取body长度
-            const bodyLength = this.buffer.readInt32BE(8);
+            const bodyLength = headBuffer.readInt32BE(8);
 
             // 检查body长度是否合理（防止恶意数据）
             if (bodyLength < 0 || bodyLength > 10 * 1024 * 1024) { // 最大10MB

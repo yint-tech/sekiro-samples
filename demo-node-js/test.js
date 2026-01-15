@@ -10,7 +10,7 @@ class TestHandler extends SekiroHandler {
         
         // 构造响应数据
         const responseData = {
-            name: 'test',
+            name: 'test-node',
             age: 10,
             request: request.param || 'no param',
             timestamp: Date.now(),
@@ -44,7 +44,7 @@ class AnotherHandler extends SekiroHandler {
 }
 
 // 创建Sekiro客户端实例
-const client = new SekiroClient('test', {
+const client = new SekiroClient('test-node', {
     host: 'sekiro.iinti.cn',
     port: 5612
 });
@@ -56,7 +56,7 @@ client
     .start();
 
 console.log('Sekiro client started, listening for requests...');
-console.log('You can test with: http://sekiro.iinti.cn/business/invoke?group=test&action=testAction&param=testparam');
+console.log('You can test with: http://sekiro.iinti.cn/business/invoke?group=test-node&action=testAction&param=testparam');
 
 // 保持程序运行
 process.on('SIGINT', () => {
